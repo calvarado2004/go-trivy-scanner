@@ -39,20 +39,38 @@ Run the service:
 ./go-trivy-scanner
 ```
 
-To validate a container image, send a POST request to `/validate` with the container image details in JSON format. For example:
+To validate a container image, send a POST request to `/scan` with the container image details in JSON format. For example:
+
+``` bash
+cat request.json
+{
+  "apiVersion": "imagepolicy.k8s.io/v1alpha1",
+  "kind": "ImageReview",
+  "spec": {
+    "containers": [
+      {
+        "image": "nginx:latest"
+      },
+      {
+        "image": "mysql:5.7"
+      }
+    ],
+    "annotations": {
+      "mycluster.image-policy.k8s.io/ticket-1234": "break-glass"
+    },
+    "namespace": "default"
+  }
+}
+```
 
 ```bash
-curl -X POST http://localhost:8080/validate -d '{"uid":"1234","object":{"spec":{"containers":[{"image":"your-container-image"}]}}}'
+curl -X POST -H "Content-Type: application/json" -d @request.json http://localhost:8080/scan
 ```
 
 The service will return a JSON response with the validation result. For example:
 
 ```json
-{
-    "uid": "1234",
-    "allowed": true,
-    "message": "Container image is allowed"
-}
+{"apiVersion":"imagepolicy.k8s.io/v1alpha1","kind":"ImageReview","status":{"allowed":true,"reason":"No more than 3 CRITICAL vulnerabilities found, accepted"}}
 ```
 
 ## License

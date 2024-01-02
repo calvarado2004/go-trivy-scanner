@@ -4,68 +4,61 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"log"
 	"net/http"
 	"os/exec"
 )
 
-type AdmissionReview struct {
-	APIVersion string   `json:"apiVersion"`
-	Kind       string   `json:"kind"`
-	Response   Response `json:"response"`
+type ImageReviewRequest struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Spec       Spec   `json:"spec"`
 }
 
-type Response struct {
-	UID     string `json:"uid"`
-	Allowed bool   `json:"allowed"`
-	Status  Status `json:"status"`
+type Spec struct {
+	Containers  []Container       `json:"containers"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+	Namespace   string            `json:"namespace"`
+}
+
+type ImageReviewResponse struct {
+	APIVersion string `json:"apiVersion"`
+	Kind       string `json:"kind"`
+	Status     Status `json:"status"`
 }
 
 type Status struct {
-	Message string `json:"message"`
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 type Container struct {
 	Image string `json:"image"`
 }
 
-type AdmissionRequest struct {
-	UID    string `json:"uid"`
-	Object Object `json:"object"`
-}
-
-type Object struct {
-	Spec Spec `json:"spec"`
-}
-
-type Spec struct {
-	Containers []Container `json:"containers"`
-}
-
 func main() {
 	r := gin.Default()
 
-	r.POST("/validate", func(c *gin.Context) {
-		var req AdmissionRequest
+	r.POST("/scan", func(c *gin.Context) {
+		var req ImageReviewRequest
 		if err := c.BindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		insecureContainers := []string{}
-		for _, container := range req.Object.Spec.Containers {
+		var insecureContainers []string
+		for _, container := range req.Spec.Containers {
 			if !isContainerSecure(container.Image) {
 				insecureContainers = append(insecureContainers, container.Image)
 			}
 		}
 
-		var response AdmissionReview
+		var response ImageReviewResponse
 		if len(insecureContainers) == 0 {
-			response = createAdmissionResponse(true, "All containers are secure")
+			response = createImageReviewResponse(true, "No more than 3 CRITICAL vulnerabilities found, accepted")
 		} else {
 			message := fmt.Sprintf("More than 3 CRITICAL vulnerabilities, rejected: %v", insecureContainers)
-			response = createAdmissionResponse(false, message)
+			response = createImageReviewResponse(false, message)
 		}
 		c.JSON(http.StatusOK, response)
 	})
@@ -98,16 +91,16 @@ func isContainerSecure(image string) bool {
 }
 
 func countCriticalVulnerabilities(data map[string]interface{}) int {
-	vulns, ok := data["Results"].([]interface{})
+	vulnerabilities, ok := data["Results"].([]interface{})
 	if !ok {
 		return 0
 	}
 
 	count := 0
-	for _, v := range vulns {
-		if vuln, ok := v.(map[string]interface{}); ok {
-			if vulnList, ok := vuln["Vulnerabilities"].([]interface{}); ok {
-				for range vulnList {
+	for _, v := range vulnerabilities {
+		if vulnerable, ok := v.(map[string]interface{}); ok {
+			if vulnerableList, ok := vulnerable["Vulnerabilities"].([]interface{}); ok {
+				for range vulnerableList {
 					count++
 				}
 			}
@@ -116,14 +109,10 @@ func countCriticalVulnerabilities(data map[string]interface{}) int {
 	return count
 }
 
-func createAdmissionResponse(allowed bool, message string) AdmissionReview {
-	return AdmissionReview{
-		APIVersion: "admission.k8s.io/v1",
-		Kind:       "AdmissionReview",
-		Response: Response{
-			UID:     uuid.New().String(),
-			Allowed: allowed,
-			Status:  Status{Message: message},
-		},
+func createImageReviewResponse(allowed bool, reason string) ImageReviewResponse {
+	return ImageReviewResponse{
+		APIVersion: "imagepolicy.k8s.io/v1alpha1",
+		Kind:       "ImageReview",
+		Status:     Status{Allowed: allowed, Reason: reason},
 	}
 }
