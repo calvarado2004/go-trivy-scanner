@@ -18,10 +18,8 @@ COPY --from=builder /app/go-trivy-scanner /usr/local/bin/go-trivy-scanner
 
 WORKDIR /app
 
-ENV TRIVY_CACHE_DIR=/app/.cache
+ENV TRIVY_CACHE_DIR=/tmp/.cache
 
-RUN mkdir -p /app/.cache && \
-    chown -R 1000:1000 /app/.cache
 
 USER 1000
 
