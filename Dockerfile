@@ -7,16 +7,21 @@ COPY go.mod main.go go.sum ./
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o go-trivy-scanner .
 
 
-FROM --platform=linux/amd64 busybox:latest
+FROM --platform=linux/amd64 yauritux/busybox-curl:latest
 
 USER root
+
 # Download trivy scanner binary
-RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.1; \
-    chmod +x /usr/local/bin/trivy; \
-    mkdir /root/.cache; \
-    chown -R 1000:1000 /root/.cache
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.48.1
 
 COPY --from=builder /app/go-trivy-scanner /usr/local/bin/go-trivy-scanner
+
+WORKDIR /app
+
+ENV TRIVY_CACHE_DIR=/app/.cache
+
+RUN mkdir -p /app/.cache && \
+    chown -R 1000:1000 /app/.cache
 
 USER 1000
 
