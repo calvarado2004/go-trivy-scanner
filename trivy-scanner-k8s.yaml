@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trivy-scan-k8s-deployment
+  labels:
+    app: trivy-scan-k8s
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trivy-scan-k8s
+  template:
+    metadata:
+      labels:
+        app: trivy-scan-k8s
+    spec:
+      containers:
+        - name: trivy-scan-k8s
+          image: calvarado2004/trivy-scan-k8s:latest
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trivy-scan-k8s-service
+spec:
+  type: ClusterIP
+  selector:
+    app: trivy-scan-k8s
+  ports:
+    - port: 8080
+      targetPort: 8080
